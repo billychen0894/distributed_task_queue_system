@@ -1,7 +1,14 @@
 from django.db import models
+import uuid
 
 
 class Task(models.Model):
+    PRIORITY_CHOICES = (
+        (1, "Low"),
+        (2, "Medium"),
+        (3, "High"),
+    )
+
     STATUS_CHOICES = (
         ("pending", "Pending"),
         ("in_progress", "In Progress"),
@@ -9,6 +16,7 @@ class Task(models.Model):
         ("failed", "Failed"),
     )
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     description = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
