@@ -67,6 +67,7 @@ class QueueManager:
             "id": str(task.id),
             "title": task.title,
             "description": task.description,
+            "priority": task.priority,
         }
 
         self.publish_message(message, self.default_routing_key)
