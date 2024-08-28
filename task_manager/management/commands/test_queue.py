@@ -12,7 +12,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # Create a task and add it to the queue
-        task = Task.objects.create(title="Test Task", description="This is a test task")
+        task = Task.objects.create(
+            title="Test Task", description="This is a test task", priority=2
+        )
 
         queue_manager = QueueManager(host=options["host"], port=options["port"])
         queue_manager.connect()
