@@ -6,5 +6,5 @@ class Command(BaseCommand):
     help = "Start the task worker"
 
     def handle(self, *args, **options):
-        self.stdout.write("Starting task worker...")
+        self.stdout.write(self.style.SUCCESS("Starting task worker..."))
         start_worker()
