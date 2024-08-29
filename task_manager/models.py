@@ -22,6 +22,8 @@ class Task(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=2)
     result = models.TextField(blank=True, null=True)
+    retry_count = models.IntegerField(default=0)
+    max_retries = models.IntegerField(default=3)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
