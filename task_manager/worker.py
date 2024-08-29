@@ -1,39 +1,50 @@
 import json
 import time
 import pika
+import logging
 from .models import Task
 from django.conf import settings
+
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 def process_task(task):
     # Simulate processing a task, such as processing data or running a computation
     print(f"Processing task: {task.title}")
     time.sleep(5)
-    return True
+    return "Task completed successfully"
 
 
 def callback(ch, method, properties, body):
     # Callback function to handle incoming messages from the queue when a new task is received
     task_data = json.loads(body)
-    print(f"Received task: {task_data['id']}")
+    logger.info(f"Received task: {task_data['id']}")
 
     # Fetch the task from the database
-    task = Task.objects.get(id=task_data["id"])
+    try:
+        task = Task.objects.get(id=task_data["id"])
+    except Task.DoesNotExist:
+        logger.error(f"Task with id {task_data['id']} not found in the database")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        return
+
     task.status = "in_progress"
     task.save()
 
     try:
         result = process_task(task)
-
-        if result:
-            task.status = "completed"
-            task.save()
-        else:
-            raise Exception("Task processing failed")
+        task.status = "completed"
+        task.result = result
+        task.save()
+        logger.info(f"Task {task.id} completed successfully")
     except Exception as e:
+        logger.error(f"Task {task.id} failed: {str(e)}")
         task.status = "failed"
         task.save()
-        print(f"Task {task.id} failed: {str(e)}")
 
     # Acknowledge the message
     ch.basic_ack(delivery_tag=method.delivery_tag)
