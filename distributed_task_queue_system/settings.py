@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+from datetime import timedelta
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-7-p(*8cc^dy3%9c-aqyu#pllri&f)dw^=aq*d1@xk7q+74t5u6"
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     "task_manager.apps.TaskManagerConfig",
     "rest_framework",
     "django_filters",
+    "rest_framework_simplejwt",
 ]
 
 MIDDLEWARE = [
@@ -140,3 +142,17 @@ RABBITMQ_PORT = os.getenv("RABBITMQ_PORT")
 RABBITMQ_VIRTUAL_HOST = os.getenv("RABBITMQ_VIRTUAL_HOST")
 RABBITMQ_USERNAME = os.getenv("RABBITMQ_USERNAME")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
+
+# REST Framework settings
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "SIGNING_KEY": os.getenv("SIMPLE_JWT_SECRET_KEY"),
+    "ALGORITHM": os.getenv("SIMPLE_JWT_ALGORITHM"),
+}
