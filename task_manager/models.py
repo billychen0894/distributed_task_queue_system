@@ -3,6 +3,12 @@ import uuid
 
 
 class Task(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_QUEUED = "queued"
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+
     PRIORITY_CHOICES = (
         (1, "Low"),
         (2, "Medium"),
@@ -11,6 +17,7 @@ class Task(models.Model):
 
     STATUS_CHOICES = (
         ("pending", "Pending"),
+        ("queued", "Queued"),
         ("in_progress", "In Progress"),
         ("completed", "Completed"),
         ("failed", "Failed"),
@@ -29,3 +36,11 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+    def get_result(self):
+        if self.status == "completed":
+            return self.result
+        elif self.status == "failed":
+            return f"Task failed after {self.retry_count} retries"
+        else:
+            return f"Task is {self.status}"
