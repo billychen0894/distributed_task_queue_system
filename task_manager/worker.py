@@ -32,22 +32,33 @@ def callback(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    task.status = "in_progress"
+    task.status = Task.STATUS_IN_PROGRESS
     task.save()
 
     try:
         result = process_task(task)
-        task.status = "completed"
+        task.status = Task.STATUS_COMPLETED
         task.result = result
         task.save()
         logger.info(f"Task {task.id} completed successfully")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
     except Exception as e:
         logger.error(f"Task {task.id} failed: {str(e)}")
-        task.status = "failed"
-        task.save()
-
-    # Acknowledge the message
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+        # Retry the task if the maximum number of retries has not been reached
+        task.retry_count += 1
+        if task.retry_count < task.max_retries:
+            task.status = Task.STATUS_QUEUED
+            logger.info(
+                f"Retrying task {task.id} ({task.retry_count}/{task.max_retries})"
+            )
+            task.save()
+            # Reject the message and requeue it
+            ch.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
+        else:
+            task.status = Task.STATUS_FAILED
+            logger.warning(f"Task {task.id} failed after {task.retry_count} retries")
+            task.save()
+            ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def start_worker():
