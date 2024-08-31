@@ -38,6 +38,7 @@ class QueueManager:
             self.channel.queue_declare(
                 queue=self.queue_name, durable=True, arguments={"x-max-priority": 3}
             )
+            self.channel.tx_select()  # Enable transactions for the channel
 
     def close(self):
         if self.connection and self.connection.is_open:
@@ -45,23 +46,32 @@ class QueueManager:
 
     # generic method to publish a message to a queue
     def publish_message(self, message, routing_key=None, priority=None):
-        if not self.connection or self.connection.is_closed:
-            self.connect()
+        try:
+            if not self.connection or self.connection.is_closed:
+                self.connect()
 
-        if routing_key is None:
-            routing_key = self.queue_name
+            if routing_key is None:
+                routing_key = self.queue_name
 
-        if not isinstance(message, str):
-            message = json.dumps(message)
+            if not isinstance(message, str):
+                message = json.dumps(message)
 
-        properties = pika.BasicProperties(delivery_mode=2)
+            properties = pika.BasicProperties(delivery_mode=2)
 
-        if priority is not None:
-            properties.priority = priority
+            if priority is not None:
+                properties.priority = priority
 
-        self.channel.basic_publish(
-            exchange="", routing_key=routing_key, body=message, properties=properties
-        )
+            self.channel.basic_publish(
+                exchange="",
+                routing_key=routing_key,
+                body=message,
+                properties=properties,
+            )
+
+            self.channel.tx_commit()  # Commit the transaction
+        except Exception as e:
+            self.channel.tx_rollback()  # Rollback the transaction
+            raise e
 
     # explict method to publish a message to the default queue - task_queue
     def submit_task(self, task):
