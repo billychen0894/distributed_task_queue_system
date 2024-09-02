@@ -87,6 +87,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             logger.error(f"Failed to submit task to queue: {e}")
 
 
+# Get all dependencies for a task
+# Add dependencies to a task
 class TaskDependencyList(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
@@ -124,3 +126,20 @@ class TaskDependencyList(generics.ListCreateAPIView):
             TaskDependencySerializer(dependency_task).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+# Remove a dependency from a task
+class TaskDependencyDetail(generics.DestroyAPIView):
+    queryset = Task.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    # Get the dependency task instance
+    def get_object(self):
+        task = get_object_or_404(Task, id=self.kwargs.get("task_id"))
+        return get_object_or_404(task.dependencies, id=self.kwargs.get("dependency_id"))
+
+    def destroy(self, request, *args, **kwargs):
+        dependency_task = self.get_object()
+        task = get_object_or_404(Task, id=self.kwargs.get("task_id"))
+        task.dependencies.remove(dependency_task)
+        return Response(status=status.HTTP_204_NO_CONTENT)
