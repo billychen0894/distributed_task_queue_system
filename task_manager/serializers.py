@@ -7,7 +7,9 @@ class TaskSerializer(serializers.ModelSerializer):
     result = serializers.SerializerMethodField()
 
     dependencies = serializers.PrimaryKeyRelatedField(
-        many=True, queryset=Task.objects.all()
+        many=True,
+        queryset=Task.objects.all(),
+        pk_field=serializers.UUIDField(format="hex_verbose"),
     )
 
     class Meta:
@@ -24,9 +26,9 @@ class TaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "dependencies",
-            "schedule_at",
+            "scheduled_at",
             "is_recurring",
-            "recurring_interval",
+            "recurrence_interval",
             "last_run_at",
         ]
         read_only_fields = [
@@ -52,3 +54,26 @@ class TaskSerializer(serializers.ModelSerializer):
                 if task.has_circular_dependency(dependency):
                     raise serializers.ValidationError("Circular dependency detected")
         return data
+
+
+class TaskDependencySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = [
+            "id",
+        ]
+
+
+class TaskDependencyCreateSerializer(serializers.Serializer):
+    dependency_id = serializers.UUIDField(format="hex_verbose")
+
+    def validate_dependency_id(self, dependency_id):
+        task = self.context["task"]
+        try:
+            dependency_task = Task.objects.get(id=dependency_id)
+        except Task.DoesNotExist:
+            raise serializers.ValidationError("Task with this id does not exist")
+
+        if task.has_circular_dependency(dependency_task):
+            raise serializers.ValidationError("Circular dependency detected")
+        return dependency_id
