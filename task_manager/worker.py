@@ -4,6 +4,7 @@ import pika
 import logging
 from .models import Task
 from django.conf import settings
+from .queue_manager import QueueManager
 
 
 logging.basicConfig(
@@ -35,11 +36,36 @@ def callback(ch, method, properties, body):
     task.status = Task.STATUS_IN_PROGRESS
     task.save()
 
+    # Check if the task is ready to run
+    if not task.is_ready_to_run():
+        logger.info(f"Task {task.id} is not ready to run")
+        # Requeue the task to later execution
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        return
+
+    # Check if all dependencies are completed
+    dependencies = task.get_all_dependencies()
+    if any(dependency.status != Task.STATUS_COMPLETED for dependency in dependencies):
+        logger.info(f"Task {task.id} is waiting for dependencies to complete")
+        # Requeue the task to later execution
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        return
+
     try:
         result = process_task(task)
         task.status = Task.STATUS_COMPLETED
         task.result = result
+        task.last_run_at = timezone.now()
         task.save()
+
+        # Handle recurring tasks
+        if task.is_recurring:
+            task.update_next_run_time()
+            # Resubmit the task to the queue for the next execution
+            queue_manager = QueueManager()
+            queue_manager.submit_task(task)
+            queue_manager.close()
+
         logger.info(f"Task {task.id} completed successfully")
         ch.basic_ack(delivery_tag=method.delivery_tag)
     except Exception as e:
@@ -53,7 +79,7 @@ def callback(ch, method, properties, body):
             )
             task.save()
             # Reject the message and requeue it
-            ch.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
         else:
             task.status = Task.STATUS_FAILED
             logger.warning(f"Task {task.id} failed after {task.retry_count} retries")

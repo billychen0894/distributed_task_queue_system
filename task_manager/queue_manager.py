@@ -75,11 +75,25 @@ class QueueManager:
 
     # explict method to publish a message to the default queue - task_queue
     def submit_task(self, task):
+        # Publish all dependencies to the queue first
+        all_dependencies = task.get_all_dependencies()
+        for dependency in all_dependencies:
+            self.publish_message(
+                {
+                    "id": str(dependency.id),
+                    "title": dependency.title,
+                    "description": dependency.description,
+                    "priority": dependency.priority,
+                },
+                self.default_routing_key,
+                dependency.priority,
+            )
+
+        # Publish the task itself to the queue
         message = {
             "id": str(task.id),
             "title": task.title,
             "description": task.description,
             "priority": task.priority,
         }
-
         self.publish_message(message, self.default_routing_key, task.priority)
