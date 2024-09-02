@@ -33,6 +33,14 @@ class Task(models.Model):
     max_retries = models.IntegerField(default=3)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    is_recurring = models.BooleanField(default=False)
+    recurrence_interval = models.DurationField(null=True, blank=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    # A task can have multiple dependencies and a dependency can be shared by multiple tasks
+    dependencies = models.ManyToManyField(
+        "self", symmetrical=False, related_name="dependent_tasks"
+    )
 
     def __str__(self):
         return self.title
@@ -44,3 +52,41 @@ class Task(models.Model):
             return f"Task failed after {self.retry_count} retries"
         else:
             return f"Task is {self.status}"
+
+    # Check if the task has a circular dependency: preventing infinite loops
+    def has_circular_dependency(self, task):
+        if task == self:
+            return True
+        for dependency in task.dependencies.all():
+            if self.has_circular_dependency(dependency):
+                return True
+        return False
+
+    # Add a dependency to the current task
+    def add_dependency(self, task):
+        if not self.has_circular_dependency(task):
+            self.dependencies.add(task)
+        else:
+            raise ValueError(
+                "Adding this dependency would cause a circular dependency."
+            )
+
+    # Get all direct and indirect dependencies of current task
+    def get_all_dependencies(self):
+        all_dependencies = set()
+        for dependency in self.dependencies.all():
+            all_dependencies.add(dependency)
+            all_dependencies.update(dependency.get_all_dependencies())
+        return all_dependencies
+
+    # Check if the task is ready to run
+    def is_ready_to_run(self):
+        if self.scheduled_at and self.scheduled_at > timezone.now():
+            return False
+        return True
+
+    # Update the next run time of the task
+    def update_next_run_time(self):
+        if self.is_recurring and self.recurrence_interval:
+            self.scheduled_at = timezone.now() + self.recurrence_interval
+            self.save()
