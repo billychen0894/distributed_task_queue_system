@@ -63,9 +63,9 @@ class Task(models.Model):
         return False
 
     # Add a dependency to the current task
-    def add_dependency(self, task):
-        if not self.has_circular_dependency(task):
-            self.dependencies.add(task)
+    def add_dependency(self, dependency_task):
+        if not self.has_circular_dependency(dependency_task):
+            self.dependencies.add(dependency_task)
         else:
             raise ValueError(
                 "Adding this dependency would cause a circular dependency."
