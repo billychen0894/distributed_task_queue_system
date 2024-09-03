@@ -1,5 +1,7 @@
 from rest_framework import status, viewsets, filters, generics
+from rest_framework.exceptions import APIException
 from .models import Task
+from .dag_manager import DAGManager
 from .serializers import (
     TaskSerializer,
     TaskDependencySerializer,
@@ -10,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.urls import reverse
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Case, When
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
@@ -143,3 +145,31 @@ class TaskDependencyDetail(generics.DestroyAPIView):
         task = get_object_or_404(Task, id=self.kwargs.get("task_id"))
         task.dependencies.remove(dependency_task)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# Get the execution order of tasks
+class TaskExecutionOrder(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TaskSerializer
+
+    def get_queryset(self):
+        tasks = Task.objects.all()
+        try:
+            ordered_tasks = DAGManager.get_execution_order(tasks)
+            ordered_ids = [task.id for task in ordered_tasks]
+
+            # Convert the list of tasks back to queryset
+            preserved = Case(
+                *[When(pk=pk, then=pos) for pos, pk in enumerate(ordered_ids)]
+            )
+            return Task.objects.filter(pk__in=ordered_ids).order_by(preserved)
+        except Exception as e:
+            raise APIException(str(e))
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

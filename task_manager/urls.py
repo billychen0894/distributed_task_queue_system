@@ -1,12 +1,16 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import TaskViewSet, TaskDependencyList, TaskDependencyDetail
+from .views import (
+    TaskViewSet,
+    TaskDependencyList,
+    TaskDependencyDetail,
+    TaskExecutionOrder,
+)
 
 router = DefaultRouter()
 router.register(r"tasks", TaskViewSet, basename="task")
 
 urlpatterns = [
-    path("", include(router.urls)),
     path(
         "tasks/<uuid:task_id>/dependencies/",
         TaskDependencyList.as_view(),
@@ -17,4 +21,10 @@ urlpatterns = [
         TaskDependencyDetail.as_view(),
         name="task-dependency-detail",
     ),
+    path(
+        "tasks/execution-order/",
+        TaskExecutionOrder.as_view(),
+        name="task-execution-order",
+    ),
+    path("", include(router.urls)),
 ]
