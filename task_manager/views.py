@@ -1,7 +1,7 @@
 from rest_framework import status, viewsets, filters, generics
 from rest_framework.exceptions import APIException
 from .models import Task
-from .dag_manager import DAGManager
+from .dag_manager import DAGManager, CyclicDependencyException
 from .serializers import (
     TaskSerializer,
     TaskDependencySerializer,
@@ -163,12 +163,24 @@ class TaskExecutionOrder(generics.ListAPIView):
                 *[When(pk=pk, then=pos) for pos, pk in enumerate(ordered_ids)]
             )
             return Task.objects.filter(pk__in=ordered_ids).order_by(preserved)
+        except CyclicDependencyException as e:
+            # Instead of raising an exception, we will return an empty queryset, passing the error in the list() method
+            self.cyclic_error = str(e)
+            return Task.objects.none()
         except Exception as e:
             raise APIException(str(e))
 
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
+            if hasattr(self, "cyclic_error"):
+                return Response(
+                    {
+                        "error": "Cyclic dependency detected",
+                        "details": self.cyclic_error,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
