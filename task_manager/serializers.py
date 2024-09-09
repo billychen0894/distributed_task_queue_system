@@ -1,8 +1,17 @@
 from rest_framework import serializers
 from .models import Task
+from django.utils import timezone
+import pytz
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    TIMEZONE_CHOICES = [(tz, tz) for tz in pytz.common_timezones]
     # result field is a serializer method field that calls the get_result method on the Task instance
     result = serializers.SerializerMethodField()
 
@@ -11,6 +20,8 @@ class TaskSerializer(serializers.ModelSerializer):
         queryset=Task.objects.all(),
         pk_field=serializers.UUIDField(format="hex_verbose"),
     )
+
+    user_timezone = serializers.ChoiceField(choices=TIMEZONE_CHOICES, default="UTC")
 
     class Meta:
         model = Task
@@ -27,8 +38,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "updated_at",
             "dependencies",
             "scheduled_at",
-            "is_recurring",
-            "recurrence_interval",
+            "user_timezone",
+            "recurrence_type",
             "last_run_at",
         ]
         read_only_fields = [
@@ -40,6 +51,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "max_retries",
             "result",
             "last_run_at",
+            "is_recurring",
+            "recurrence_interval",
         ]
 
     def get_result(self, obj):
@@ -54,6 +67,26 @@ class TaskSerializer(serializers.ModelSerializer):
                 if task.has_circular_dependency(dependency):
                     raise serializers.ValidationError("Circular dependency detected")
         return data
+
+    def create(self, validated_data):
+        user_timezone = validated_data.get("user_timezone", "UTC")
+        scheduled_at = validated_data.get("scheduled_at")
+
+        if scheduled_at:
+            # Get user local time zone
+            user_tz = pytz.timezone(user_timezone)
+
+            # Remove timezone info from scheduled_at that was automatically added as UTC timezone
+            # the schedule_at input value should be user's local time
+            naive_local_time = scheduled_at.replace(tzinfo=None)
+
+            # make aware the naive_local_time to the user time zone
+            aware_local_time = user_tz.localize(naive_local_time)
+
+            # converting back user time zone back to UTC for scheduled_at
+            validated_data["scheduled_at"] = aware_local_time.astimezone(pytz.UTC)
+
+        return super().create(validated_data)
 
 
 class TaskDependencySerializer(serializers.ModelSerializer):
