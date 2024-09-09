@@ -5,6 +5,7 @@ import logging
 from .models import Task
 from django.conf import settings
 from .queue_manager import QueueManager
+from django.utils import timezone
 
 
 logging.basicConfig(
@@ -36,11 +37,14 @@ def callback(ch, method, properties, body):
     task.status = Task.STATUS_IN_PROGRESS
     task.save()
 
+    queue_manager = QueueManager()
     # Check if the task is ready to run
     if not task.is_ready_to_run():
         logger.info(f"Task {task.id} is not ready to run")
-        # Requeue the task to later execution
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        # Re-submit task to delay queue
+        queue_manager.publish_to_delay_queue(ch, task)
+        # Acknowledge original message to remove it from the queue
+        ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
     # Check if all dependencies are completed
@@ -48,7 +52,8 @@ def callback(ch, method, properties, body):
     if any(dependency.status != Task.STATUS_COMPLETED for dependency in dependencies):
         logger.info(f"Task {task.id} is waiting for dependencies to complete")
         # Requeue the task to later execution
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        queue_manager.publish_to_delay_queue(ch, task)
+        ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
     try:
@@ -59,12 +64,19 @@ def callback(ch, method, properties, body):
         task.save()
 
         # Handle recurring tasks
-        if task.is_recurring:
-            task.update_next_run_time()
-            # Resubmit the task to the queue for the next execution
-            queue_manager = QueueManager()
-            queue_manager.submit_task(task)
-            queue_manager.close()
+        # if task.is_recurring and task.recurrence_type != "none":
+        #     task.update_next_run_time()
+
+        #     if task.is_ready_to_run():
+        #         delay = (task.scheduled_at - timezone.now()).total_seconds()
+        #         # Resubmit the task to the queue for the next execution
+        #         queue_manager.submit_task(task, delay=delay)
+        #         queue_manager.close()
+        #     else:
+        #         logger.info(f"Task {task.id} is not ready to run")
+        #         # Requeue the task to later execution
+        #         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        #         return
 
         logger.info(f"Task {task.id} completed successfully")
         ch.basic_ack(delivery_tag=method.delivery_tag)
