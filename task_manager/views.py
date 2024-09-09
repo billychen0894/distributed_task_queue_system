@@ -16,6 +16,12 @@ from django.db.models import Count, Case, When
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 class TaskViewSet(viewsets.ModelViewSet):
