@@ -45,7 +45,7 @@ class QueueManager:
             self.connection.close()
 
     # generic method to publish a message to a queue
-    def publish_message(self, message, routing_key=None, priority=None):
+    def publish_message(self, message, routing_key=None, priority=None, delay=0):
         try:
             if not self.connection or self.connection.is_closed:
                 self.connect()
@@ -61,12 +61,34 @@ class QueueManager:
             if priority is not None:
                 properties.priority = priority
 
-            self.channel.basic_publish(
-                exchange="",
-                routing_key=routing_key,
-                body=message,
-                properties=properties,
-            )
+            if delay > 0:
+                # Create a delay queue
+                delay_queue_name = f"{self.queue_name}_delay"
+                self.channel.queue_declare(
+                    queue=delay_queue_name,
+                    durable=True,
+                    arguments={
+                        "x-message-ttl": delay,
+                        "x-dead-letter-exchange": "",
+                        "x-dead-letter-routing-key": routing_key,
+                    },
+                )
+
+                # Publish the message to the delay queue
+                self.channel.basic_publish(
+                    exchange="",
+                    routing_key=delay_queue_name,
+                    body=message,
+                    properties=properties,
+                )
+
+            else:
+                self.channel.basic_publish(
+                    exchange="",
+                    routing_key=routing_key,
+                    body=message,
+                    properties=properties,
+                )
 
             self.channel.tx_commit()  # Commit the transaction
         except Exception as e:
@@ -75,9 +97,17 @@ class QueueManager:
 
     # explict method to publish a message to the default queue - task_queue
     def submit_task(self, task):
+        delay = 0
         # Publish all dependencies to the queue first
         all_dependencies = task.get_all_dependencies()
         for dependency in all_dependencies:
+            is_ready = dependency.is_ready_to_run()
+
+            if not is_ready:
+                delay = 60000  # 1 minute
+            else:
+                delay = 0
+
             self.publish_message(
                 {
                     "id": str(dependency.id),
@@ -87,13 +117,54 @@ class QueueManager:
                 },
                 self.default_routing_key,
                 dependency.priority,
+                delay=delay,
             )
 
+        is_ready = task.is_ready_to_run()
+
         # Publish the task itself to the queue
+        if not is_ready:
+            delay = 60000
+        else:
+            delay = 0
+
         message = {
             "id": str(task.id),
             "title": task.title,
             "description": task.description,
             "priority": task.priority,
         }
-        self.publish_message(message, self.default_routing_key, task.priority)
+        self.publish_message(message, self.default_routing_key, task.priority, delay)
+
+    def publish_to_delay_queue(self, channel, task, delay=60000):
+        delay_queue_name = f"{self.queue_name}_delay"
+        channel.queue_declare(
+            queue=delay_queue_name,
+            durable=True,
+            arguments={
+                "x-message-ttl": delay,
+                "x-dead-letter-exchange": "",
+                "x-dead-letter-routing-key": self.default_routing_key,
+            },
+        )
+
+        properties = pika.BasicProperties(delivery_mode=2)
+
+        if task.priority is not None:
+            properties.priority = task.priority
+
+        message = json.dumps(
+            {
+                "id": str(task.id),
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+            }
+        )
+        # Publish the message to the delay queue
+        channel.basic_publish(
+            exchange="",
+            routing_key=delay_queue_name,
+            body=message,
+            properties=properties,
+        )
