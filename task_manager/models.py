@@ -127,16 +127,16 @@ class Task(models.Model):
             self.scheduled_at = timezone.now() + self.recurrence_interval
             self.save()
 
-    # @property
-    # def is_recurring(self):
-    #     return self.recurrence_type != "none"
+    @property
+    def is_recurring(self):
+        return self.recurrence_type != "none"
 
-    # @property
-    # def recurrence_interval(self):
-    #     if self.recurrence_type == "daily":
-    #         return timedelta(days=1)
-    #     elif self.recurrence_type == "weekly":
-    #         return timedelta(weeks=1)
-    #     elif self.recurrence_type == "monthly":
-    #         return timedelta(days=30)
-    #     return None
+    @property
+    def recurrence_interval(self):
+        if self.recurrence_type == "daily":
+            return timedelta(days=1)
+        elif self.recurrence_type == "weekly":
+            return timedelta(weeks=1)
+        elif self.recurrence_type == "monthly":
+            return timedelta(days=30)
+        return None

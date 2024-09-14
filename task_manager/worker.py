@@ -63,23 +63,21 @@ def callback(ch, method, properties, body):
         task.last_run_at = timezone.now()
         task.save()
 
-        # Handle recurring tasks
-        # if task.is_recurring and task.recurrence_type != "none":
-        #     task.update_next_run_time()
-
-        #     if task.is_ready_to_run():
-        #         delay = (task.scheduled_at - timezone.now()).total_seconds()
-        #         # Resubmit the task to the queue for the next execution
-        #         queue_manager.submit_task(task, delay=delay)
-        #         queue_manager.close()
-        #     else:
-        #         logger.info(f"Task {task.id} is not ready to run")
-        #         # Requeue the task to later execution
-        #         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-        #         return
-
         logger.info(f"Task {task.id} completed successfully")
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
+        # Handle recurring tasks
+        if task.is_recurring and task.recurrence_type != "none":
+            task.update_next_run_time()
+
+            if not task.is_ready_to_run():
+                logger.info(f"Task {task.id} is not ready to run")
+                # Re-submit task to delay queue
+                queue_manager.publish_to_delay_queue(ch, task)
+            else:
+                queue_manager.publish_message(task)
+
+        queue_manager.close()
     except Exception as e:
         logger.error(f"Task {task.id} failed: {str(e)}")
         # Retry the task if the maximum number of retries has not been reached
