@@ -16,12 +16,10 @@ from django.db.models import Count, Case, When
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from .health_checks import check_database_connection, check_rabbitmq_connection
 import logging
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("task_manager")
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -189,5 +187,29 @@ class TaskExecutionOrder(generics.ListAPIView):
                 )
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class HealthCheckView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request, *args, **kwargs):
+        try:
+            rabbitmq_health = check_rabbitmq_connection()
+            database_health = check_database_connection()
+
+            health_status = (
+                "healthy" if rabbitmq_health and database_health else "unhealthy"
+            )
+
+            return Response(
+                {
+                    "status": health_status,
+                    "rabbitmq": "connected" if rabbitmq_health else "disconnected",
+                    "database": "connected" if database_health else "disconnected",
+                },
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

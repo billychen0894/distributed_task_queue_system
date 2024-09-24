@@ -5,6 +5,7 @@ from .views import (
     TaskDependencyList,
     TaskDependencyDetail,
     TaskExecutionOrder,
+    HealthCheckView,
 )
 
 router = DefaultRouter()
@@ -25,6 +26,11 @@ urlpatterns = [
         "tasks/execution-order/",
         TaskExecutionOrder.as_view(),
         name="task-execution-order",
+    ),
+    path(
+        "health/",
+        HealthCheckView.as_view(),
+        name="health-check",
     ),
     path("", include(router.urls)),
 ]
