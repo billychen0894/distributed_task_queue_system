@@ -6,12 +6,9 @@ from .models import Task
 from django.conf import settings
 from .queue_manager import QueueManager
 from django.utils import timezone
+import logging
 
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("task_manager")
 
 
 def process_task(task):
@@ -63,7 +60,14 @@ def callback(ch, method, properties, body):
         task.last_run_at = timezone.now()
         task.save()
 
-        logger.info(f"Task {task.id} completed successfully")
+        logger.info(
+            "Task processed",
+            extra={
+                "task_id": task.id,
+                "status": task.status,
+                "result": task.result,
+            },
+        )
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
         # Handle recurring tasks
