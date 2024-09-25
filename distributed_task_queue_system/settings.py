@@ -14,6 +14,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from datetime import timedelta
+import dj_database_url
+from urllib.parse import urlparse
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,9 +34,9 @@ LOGS_DIR.mkdir(exist_ok=True)
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "FALSE") == "TRUE"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 
 
 # Application definition
@@ -85,17 +87,7 @@ WSGI_APPLICATION = "distributed_task_queue_system.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
-    }
-}
+DATABASES = {"default": dj_database_url.config(default=os.getenv("DATABASE_URL"))}
 
 
 # Password validation
@@ -140,11 +132,15 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # RabbitMQ settings
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
-RABBITMQ_PORT = os.getenv("RABBITMQ_PORT")
-RABBITMQ_VIRTUAL_HOST = os.getenv("RABBITMQ_VIRTUAL_HOST")
-RABBITMQ_USERNAME = os.getenv("RABBITMQ_USERNAME")
-RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672//")
+
+# Parse RABBITMQ_URL for individual components
+rabbitmq_url = urlparse(RABBITMQ_URL)
+RABBITMQ_USERNAME = rabbitmq_url.username or "guest"
+RABBITMQ_PASSWORD = rabbitmq_url.password or "guest"
+RABBITMQ_HOST = rabbitmq_url.hostname or "localhost"
+RABBITMQ_PORT = rabbitmq_url.port or 5672
+RABBITMQ_VIRTUAL_HOST = rabbitmq_url.path[1:] or "/"
 
 # REST Framework settings
 REST_FRAMEWORK = {
