@@ -45,10 +45,10 @@ The main components of the project are:
 
 1. Clone the repository:
 ```
-git clone <repository-url>
+git clone https://github.com/billychen0894/distributed_task_queue_system.git
 cd distributed_task_queue_system
 ```
-2. Create a `.env` file in the project root with the following variables (Please refer to `.env.template`)
+2. Create a `.env` file in the project root (Please refer to `.env.template`)
 3. Build and run the Docker containers:
 ```
 docker-compose up --build
